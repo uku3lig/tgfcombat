@@ -15,14 +15,11 @@ repositories {
         name = 'sonatype'
         url = 'https://oss.sonatype.org/content/groups/public/'
     }
-    maven {
-        url 'https://nexus.sirblobman.xyz/repository/public/'
-    }
 }
 
 dependencies {
     compileOnly 'org.spigotmc:spigot-api:1.18.1-R0.1-SNAPSHOT'
-    compileOnly 'com.SirBlobman.combatlogx:CombatLogX-API:10.0.0.0-SNAPSHOT'
+    implementation "net.kyori:adventure-api:4.10.1"
 }
 
 def targetJavaVersion = 17
