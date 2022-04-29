@@ -46,18 +46,18 @@ public class CombatListener implements Listener {
         Map<UUID, Boolean> states = Database.getInstance(plugin).getStates();
 
         if (Boolean.FALSE.equals(states.getOrDefault(damager.getUniqueId(), true))) {
-            damager.sendMessage(ChatColor.GOLD + "[" + ChatColor.DARK_RED + "TGFCombat" + ChatColor.GOLD + "] " + ChatColor.RED + "You have PVP disabled!");
+            TGFCombat.sendMessage(damager, ChatColor.RED + "You have PVP disabled!");
             return false;
         }
 
         if (Boolean.FALSE.equals(states.getOrDefault(entity.getUniqueId(), true))) {
-            damager.sendMessage(ChatColor.GOLD + "[" + ChatColor.DARK_RED + "TGFCombat" + ChatColor.GOLD + "] " + ChatColor.RED + "That player has PVP disabled!");
+            TGFCombat.sendMessage(damager, ChatColor.RED + "That player has PVP disabled!");
             return false;
         }
 
         final boolean alreadyInCombat = lastAttackTimes.containsKey(damager.getUniqueId()) && ((double)Instant.now().toEpochMilli() / 1000.0 - lastAttackTimes.get(damager.getUniqueId())) < COOLDOWN;
         if (!alreadyInCombat) {
-            damager.sendMessage(ChatColor.GOLD + "[" + ChatColor.DARK_RED + "TGFCombat" + ChatColor.GOLD + "] " + ChatColor.YELLOW + "You are in combat! " + ChatColor.RED + "Do not log out!");
+            TGFCombat.sendMessage(damager,ChatColor.YELLOW + "You are in combat! " + ChatColor.RED + "Do not log out!");
         }
 
         lastAttackTimes.put(damager.getUniqueId(), (double)Instant.now().toEpochMilli() / 1000.0);
@@ -78,7 +78,7 @@ public class CombatListener implements Listener {
                     Bukkit.getScheduler().runTaskLater(plugin, this, 1L);
                 }
                 else {
-                    damager.sendMessage(ChatColor.GOLD + "[" + ChatColor.DARK_RED + "TGFCombat" + ChatColor.GOLD + "] " + ChatColor.GREEN + "You are no longer in combat.");
+                    TGFCombat.sendMessage(damager,ChatColor.GREEN + "You are no longer in combat.");
                 }
             }
         };
@@ -222,7 +222,7 @@ public class CombatListener implements Listener {
 
         for (String blockedCommand : blockedCommands) {
             if (event.getMessage().split(" ")[0].toLowerCase().equals(blockedCommand)) {
-                event.getPlayer().sendMessage(ChatColor.GOLD + "[" + ChatColor.DARK_RED + "TGFCombat" + ChatColor.GOLD + "] " + ChatColor.RED + "You may not use that command while in combat.");
+                TGFCombat.sendMessage(event.getPlayer(), ChatColor.RED + "You may not use that command while in combat.");
                 event.setCancelled(true);
             }
         }
@@ -230,6 +230,6 @@ public class CombatListener implements Listener {
 
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
-        lastAttackTimes.put(event.getPlayer().getUniqueId(), 0.0);
+        lastAttackTimes.put(event.getEntity().getUniqueId(), 0.0);
     }
 }

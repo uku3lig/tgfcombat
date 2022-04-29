@@ -1,5 +1,7 @@
 package org.tgforever.tgfcombat;
 
+import org.bukkit.ChatColor;
+import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.*;
@@ -15,11 +17,15 @@ public class TGFCombat extends JavaPlugin {
         lastAttackTimes = new HashMap<UUID, Double>();
 
         getServer().getPluginManager().registerEvents(new CombatListener(this, lastAttackTimes), this);
-        this.getCommand("pvp").setExecutor(new CommandPVPToggle(lastAttackTimes));
+        this.getCommand("pvp").setExecutor(new CommandPVPToggle(this, lastAttackTimes));
     }
 
     @Override
     public void onDisable() {
         getLogger().info("onDisable has been run");
+    }
+
+    public static void sendMessage(CommandSender target, String message) {
+        target.sendMessage(ChatColor.GOLD + "[" + ChatColor.DARK_RED + "TGFCombat" + ChatColor.GOLD + "] " + message);
     }
 }

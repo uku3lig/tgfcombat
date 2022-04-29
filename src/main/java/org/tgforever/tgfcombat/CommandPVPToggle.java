@@ -32,7 +32,7 @@ public class CommandPVPToggle implements CommandExecutor {
         Player player = (Player) sender;
         final boolean alreadyInCombat = lastAttackTimes.containsKey(player.getUniqueId()) && ((double) Instant.now().toEpochMilli() / 1000.0 - lastAttackTimes.get(player.getUniqueId())) < 15.0;
         if (alreadyInCombat) {
-            player.sendMessage(ChatColor.GOLD + "[" + ChatColor.DARK_RED + "TGFCombat" + ChatColor.GOLD + "] " + ChatColor.RED + "You cannot toggle PVP while in combat!");
+            TGFCombat.sendMessage(player, ChatColor.RED + "You cannot toggle PVP while in combat!");
             return true;
         }
 
@@ -40,10 +40,10 @@ public class CommandPVPToggle implements CommandExecutor {
         Database.getInstance(plugin).edit(player.getUniqueId(), !currentValue);
 
         if (!currentValue) {
-            player.sendMessage(ChatColor.GOLD + "[" + ChatColor.DARK_RED + "TGFCombat" + ChatColor.GOLD + "] " + ChatColor.GREEN + "PVP enabled!");
+            TGFCombat.sendMessage(player, ChatColor.GREEN + "PVP enabled!");
         }
         else {
-            player.sendMessage(ChatColor.GOLD + "[" + ChatColor.DARK_RED + "TGFCombat" + ChatColor.GOLD + "] " + ChatColor.GREEN + "PVP disabled!");
+            TGFCombat.sendMessage(player, ChatColor.GREEN + "PVP disabled!");
         }
 
         return true;
