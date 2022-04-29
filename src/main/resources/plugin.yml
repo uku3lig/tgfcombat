@@ -1,0 +1,8 @@
+name: TGFCombat
+version: '${version}'
+main: org.tgforever.tgfcombat.TGFCombat
+api-version: 1.18
+commands:
+  pvp:
+    description: PVP
+    permission: tgfcombat.pvp
