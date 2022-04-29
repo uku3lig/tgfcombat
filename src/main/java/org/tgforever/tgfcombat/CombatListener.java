@@ -2,54 +2,55 @@ package org.tgforever.tgfcombat;
 
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.TextComponent;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.type.Bed;
-import org.bukkit.entity.*;
+import org.bukkit.entity.EnderCrystal;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
+import org.bukkit.entity.ThrownPotion;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.BlockExplodeEvent;
-import org.bukkit.event.entity.*;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.entity.PotionSplashEvent;
+import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
 
 public class CombatListener implements Listener {
     private final double COOLDOWN = 15.0;
     private final HashMap<UUID, Double> lastAttackTimes;
-    private final TGFCombat parentPlugin;
-    private final HashMap<UUID, Boolean> pvpEnabled;
+    private final JavaPlugin plugin;
     private final HashMap<Integer, UUID> lastCrystalAttackers;
     private final HashMap<Location, UUID> lastVolatileBlockAttackers;
 
-    CombatListener(TGFCombat plugin, HashMap<UUID, Boolean> pvpEnabled, HashMap<UUID, Double> lastAttackTimes) {
-        parentPlugin = plugin;
-        this.pvpEnabled = pvpEnabled;
+    CombatListener(JavaPlugin plugin, HashMap<UUID, Double> lastAttackTimes) {
+        this.plugin = plugin;
         this.lastAttackTimes = lastAttackTimes;
         lastCrystalAttackers = new HashMap<Integer, UUID>();
         lastVolatileBlockAttackers = new HashMap<Location, UUID>();
     }
 
     private boolean triggerCombat(Player entity, Player damager) {
-        final boolean damagerPvpDisabled = !pvpEnabled.getOrDefault(damager.getUniqueId(), true);
-        if (damagerPvpDisabled) {
+        Map<UUID, Boolean> states = Database.getInstance(plugin).getStates();
+
+        if (Boolean.FALSE.equals(states.getOrDefault(damager.getUniqueId(), true))) {
             damager.sendMessage(ChatColor.GOLD + "[" + ChatColor.DARK_RED + "TGFCombat" + ChatColor.GOLD + "] " + ChatColor.RED + "You have PVP disabled!");
             return false;
         }
 
-        final boolean entityPvpDisabled = !pvpEnabled.getOrDefault(entity.getUniqueId(), true);
-        if (entityPvpDisabled) {
+        if (Boolean.FALSE.equals(states.getOrDefault(entity.getUniqueId(), true))) {
             damager.sendMessage(ChatColor.GOLD + "[" + ChatColor.DARK_RED + "TGFCombat" + ChatColor.GOLD + "] " + ChatColor.RED + "That player has PVP disabled!");
             return false;
         }
@@ -74,7 +75,7 @@ public class CombatListener implements Listener {
                 audience.sendActionBar(Component.text(combatIndicator + combatBar + "   " + remainingTime + " ".repeat(4 - (remainingTime.length() - 2))));
 
                 if (timeSinceLastAttack < COOLDOWN) {
-                    Bukkit.getScheduler().runTaskLater(parentPlugin, this, 1L);
+                    Bukkit.getScheduler().runTaskLater(plugin, this, 1L);
                 }
                 else {
                     damager.sendMessage(ChatColor.GOLD + "[" + ChatColor.DARK_RED + "TGFCombat" + ChatColor.GOLD + "] " + ChatColor.GREEN + "You are no longer in combat.");
@@ -83,7 +84,7 @@ public class CombatListener implements Listener {
         };
 
         if (!alreadyInCombat) {
-            Bukkit.getScheduler().runTask(parentPlugin, runnable);
+            Bukkit.getScheduler().runTask(plugin, runnable);
         }
 
         return true;
@@ -103,7 +104,7 @@ public class CombatListener implements Listener {
                 }
 
                 final UUID uuid = lastCrystalAttackers.get(crystal.getEntityId());
-                final Player attacker = parentPlugin.getServer().getPlayer(uuid);
+                final Player attacker = plugin.getServer().getPlayer(uuid);
                 if (attacker == null) return;
                 if (attacker.equals(entity)) return;
 
