@@ -1,6 +1,5 @@
 package org.tgforever.tgfcombat;
 
-import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -25,21 +24,31 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
+import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.UUID;
 
+// FIXME make attacks NON LETHAL
+// FIXME creative mode
 public class CombatListener implements Listener {
-    private final double COOLDOWN = 15.0;
-    private final HashMap<UUID, Double> lastAttackTimes;
+    private static final int COOLDOWN = 15;
+    private final HashMap<UUID, Instant> lastAttack = new HashMap<>();
     private final JavaPlugin plugin;
-    private final HashMap<Integer, UUID> lastCrystalAttackers;
+    private final HashMap<Integer, UUID> crystalAttackers;
     private final HashMap<Location, UUID> lastVolatileBlockAttackers;
 
-    CombatListener(JavaPlugin plugin, HashMap<UUID, Double> lastAttackTimes) {
+    CombatListener(JavaPlugin plugin) {
         this.plugin = plugin;
-        this.lastAttackTimes = lastAttackTimes;
-        lastCrystalAttackers = new HashMap<Integer, UUID>();
-        lastVolatileBlockAttackers = new HashMap<Location, UUID>();
+        crystalAttackers = new HashMap<>();
+        lastVolatileBlockAttackers = new HashMap<>();
+    }
+
+    private boolean isInCombat(Player player) {
+        if (!lastAttack.containsKey(player.getUniqueId())) return false;
+        return lastAttack.get(player.getUniqueId()).plusSeconds(COOLDOWN).isAfter(Instant.now());
     }
 
     private boolean triggerCombat(Player entity, Player damager) {
@@ -53,69 +62,45 @@ public class CombatListener implements Listener {
             return false;
         }
 
-        final boolean alreadyInCombat = lastAttackTimes.containsKey(damager.getUniqueId()) && ((double)Instant.now().toEpochMilli() / 1000.0 - lastAttackTimes.get(damager.getUniqueId())) < COOLDOWN;
-        if (!alreadyInCombat) {
-            TGFCombat.sendMessage(damager,ChatColor.YELLOW + "You are in combat! " + ChatColor.RED + "Do not log out!");
-        }
-
-        lastAttackTimes.put(damager.getUniqueId(), (double)Instant.now().toEpochMilli() / 1000.0);
-
-        Audience audience = (Audience) damager;
-        Runnable runnable = new Runnable() {
+        Runnable task = new Runnable() {
             @Override
             public void run() {
-                double timeSinceLastAttack = (double)Instant.now().toEpochMilli() / 1000.0 - lastAttackTimes.get(damager.getUniqueId());
-                timeSinceLastAttack = Math.min(timeSinceLastAttack, COOLDOWN);
+                int sinceLastAttack = (int) Duration.between(Instant.now(), lastAttack.get(damager.getUniqueId())).abs().toSeconds();
+                sinceLastAttack = Math.min(sinceLastAttack, COOLDOWN);
 
-                String combatBar = ChatColor.RED + "|".repeat((int) Math.ceil(COOLDOWN - timeSinceLastAttack)) + ChatColor.GREEN + "|".repeat((int) Math.floor(timeSinceLastAttack));
-                String remainingTime = ChatColor.WHITE + Double.toString((double)Math.round((COOLDOWN - timeSinceLastAttack) * 10d) / 10d);
-                String combatIndicator = ChatColor.DARK_AQUA + "Combat" + ChatColor.WHITE + "   >>   ";
-                audience.sendActionBar(Component.text(combatIndicator + combatBar + "   " + remainingTime + " ".repeat(4 - (remainingTime.length() - 2))));
+                String combatBar = ChatColor.RED + "|".repeat(COOLDOWN - sinceLastAttack) + ChatColor.GREEN + "|".repeat(sinceLastAttack);
+                String remainingTime = ChatColor.WHITE + String.valueOf(COOLDOWN - sinceLastAttack) + "s";
+                String combatIndicator = ChatColor.DARK_AQUA + "Combat" + ChatColor.WHITE + " » ";
+                damager.sendActionBar(Component.text(combatIndicator + combatBar + "   " + remainingTime + " ".repeat(4 - (remainingTime.length() - 2))));
 
-                if (timeSinceLastAttack < COOLDOWN) {
-                    Bukkit.getScheduler().runTaskLater(plugin, this, 1L);
-                }
-                else {
-                    TGFCombat.sendMessage(damager,ChatColor.GREEN + "You are no longer in combat.");
-                }
+                if (sinceLastAttack < COOLDOWN) Bukkit.getScheduler().runTaskLater(plugin, this, 1L);
+                else TGFCombat.sendMessage(damager, ChatColor.GREEN + "You are no longer in combat.");
             }
         };
 
-        if (!alreadyInCombat) {
-            Bukkit.getScheduler().runTask(plugin, runnable);
+        if (!isInCombat(damager)) {
+            TGFCombat.sendMessage(damager, ChatColor.YELLOW + "You are in combat! " + ChatColor.RED + "Do not log out!");
+            Bukkit.getScheduler().runTask(plugin, task);
         }
 
+        if (!isInCombat(entity)) TGFCombat.sendMessage(entity, ChatColor.YELLOW + damager.getName() + " is attacking you!");
+        else lastAttack.put(entity.getUniqueId(), Instant.now()); // if both are in combat, reset both timers
+
+        lastAttack.put(damager.getUniqueId(), Instant.now());
         return true;
     }
 
-    @EventHandler
+    @EventHandler // TODO check the crystal code
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
         if (event.getEntity() instanceof Player entity) {
-            if (event.getDamager() instanceof Player damager) {
-                final boolean shouldEnterCombat = triggerCombat(entity, damager);
-                if (!shouldEnterCombat) {
-                    event.setCancelled(true);
-                }
-            } else if (event.getDamager() instanceof EnderCrystal crystal) {
-                if (!lastCrystalAttackers.containsKey(crystal.getEntityId())) {
-                    return;
-                }
-
-                final UUID uuid = lastCrystalAttackers.get(crystal.getEntityId());
-                final Player attacker = plugin.getServer().getPlayer(uuid);
-                if (attacker == null) return;
-                if (attacker.equals(entity)) return;
-
-                final boolean shouldEnterCombat = triggerCombat(entity, attacker);
-                if (!shouldEnterCombat) {
-                    event.setCancelled(true);
-                }
+            if (event.getDamager() instanceof Player damager && !triggerCombat(entity, damager)) event.setCancelled(true);
+            else if (event.getDamager() instanceof EnderCrystal crystal && crystalAttackers.containsKey(crystal.getEntityId())) {
+                final Player attacker = plugin.getServer().getPlayer(crystalAttackers.get(crystal.getEntityId()));
+                if (attacker == null || attacker.equals(entity)) return;
+                if (!triggerCombat(entity, attacker)) event.setCancelled(true);
             }
-        }
-        else if (event.getEntity() instanceof EnderCrystal crystal) {
-            if (event.getDamager() instanceof Player damager) {
-                lastCrystalAttackers.put(crystal.getEntityId(), damager.getUniqueId());
-            }
+        } else if (event.getEntity() instanceof EnderCrystal crystal && event.getDamager() instanceof Player damager) {
+            crystalAttackers.put(crystal.getEntityId(), damager.getUniqueId());
         }
     }
 
@@ -130,17 +115,19 @@ public class CombatListener implements Listener {
             if (!shouldEnterCombat) {
                 event.setCancelled(true);
             }
-        }
-        else if (event.getHitEntity() instanceof EnderCrystal crystal) {
-            lastCrystalAttackers.put(crystal.getEntityId(), damager.getUniqueId());
+        } else if (event.getHitEntity() instanceof EnderCrystal crystal) {
+            crystalAttackers.put(crystal.getEntityId(), damager.getUniqueId());
         }
     }
 
+    @EventHandler
     public void onPotionSplash(PotionSplashEvent event) {
-        if (!(event.getEntity().getShooter() instanceof Player damagwr)) {
+        if (!(event.getEntity().getShooter() instanceof Player damager)) {
             return;
         }
 
+        // FIXME if potion hits directly, type doesnt matter
+        // FIXME lingering not working
         final List<PotionEffectType> negativePotionEffects = Arrays.asList(
                 PotionEffectType.BAD_OMEN,
                 PotionEffectType.BLINDNESS,
@@ -163,7 +150,7 @@ public class CombatListener implements Listener {
                         continue;
                     }
 
-                    final boolean shouldEnterCombat = triggerCombat(player, damagwr);
+                    final boolean shouldEnterCombat = triggerCombat(player, damager);
                     if (!shouldEnterCombat) {
                         event.setCancelled(true);
                     }
@@ -179,6 +166,7 @@ public class CombatListener implements Listener {
 
         if (block == null) return;
 
+        // FIXME respawn anchors
         if (block.getBlockData() instanceof Bed) {
             if (player.getWorld().getEnvironment() == World.Environment.NORMAL) {
                 return;
@@ -190,22 +178,14 @@ public class CombatListener implements Listener {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-        if (!lastAttackTimes.containsKey(event.getPlayer().getUniqueId())) {
-            return;
-        }
-
-        double currentTime = (double)Instant.now().toEpochMilli() / 1000.0;
-        double lastAttackTime = lastAttackTimes.get(event.getPlayer().getUniqueId());
-        if (currentTime - lastAttackTime < COOLDOWN) {
-            event.getPlayer().setHealth(0);
-        }
+        if (isInCombat(event.getPlayer())) event.getPlayer().setHealth(0);
     }
 
     @EventHandler
     public void onCommand(PlayerCommandPreprocessEvent event) {
-        final boolean inCombat = lastAttackTimes.containsKey(event.getPlayer().getUniqueId()) && ((double)Instant.now().toEpochMilli() / 1000.0 - lastAttackTimes.get(event.getPlayer().getUniqueId())) < COOLDOWN;
-        if (!inCombat) return;
+        if (!isInCombat(event.getPlayer())) return;
 
+        // TODO blocked commands in config file
         final String[] blockedCommands = {
                 "/home",
                 "/h",
@@ -228,6 +208,6 @@ public class CombatListener implements Listener {
 
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
-        lastAttackTimes.put(event.getEntity().getUniqueId(), 0.0);
+        lastAttack.remove(event.getEntity().getUniqueId());
     }
 }
