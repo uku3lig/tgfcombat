@@ -7,8 +7,6 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.io.FileWriter;
-import java.io.IOException;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.UUID;
@@ -36,7 +34,7 @@ public class CommandPVPToggle implements CommandExecutor {
             return true;
         }
 
-        final boolean currentValue = Database.getInstance(plugin).getStates().getOrDefault(player.getUniqueId(), false);
+        final boolean currentValue = Database.getInstance(plugin).getState(player.getUniqueId());
         Database.getInstance(plugin).edit(player.getUniqueId(), !currentValue);
 
         if (!currentValue) {

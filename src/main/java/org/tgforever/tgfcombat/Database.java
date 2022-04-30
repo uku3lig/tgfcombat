@@ -1,14 +1,11 @@
 package org.tgforever.tgfcombat;
 
-import com.google.common.collect.ImmutableMap;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.*;
-import java.util.Collections;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -46,7 +43,7 @@ public class Database {
 
     public Connection getConnection() {
         try {
-            if (!Files.exists(dbPath)) Files.createFile(dbPath);
+            if (plugin.getDataFolder().mkdirs() || !Files.exists(dbPath)) Files.createFile(dbPath);
         } catch (IOException e) {
             plugin.getLogger().severe("Could not create database toggle.db");
         }
@@ -62,22 +59,16 @@ public class Database {
         }
     }
 
-    public Map<UUID, Boolean> getStates() {
-        try (Statement statement = getConnection().createStatement()) {
-            ImmutableMap.Builder<UUID, Boolean> builder = ImmutableMap.builder();
-
-            statement.execute("SELECT * FROM toggle_states");
-            ResultSet set = statement.getResultSet();
-            while (set.next()) {
-                builder.put(UUID.fromString(set.getString("uuid")), set.getBoolean("state"));
-            }
-
-            return builder.build();
+    public boolean getState(UUID uuid) {
+        try (PreparedStatement statement = getConnection().prepareStatement("SELECT * FROM toggle_states WHERE uuid = ?")) {
+            statement.setString(1, uuid.toString());
+            ResultSet set = statement.executeQuery();
+            if (set.next()) return set.getBoolean("state");
         } catch (SQLException e) {
             plugin.getLogger().warning("Could not fetch data from the database");
             e.printStackTrace();
-            return Collections.emptyMap();
         }
+        return true; // true is the default state
     }
 
     public void edit(UUID uuid, boolean state) {

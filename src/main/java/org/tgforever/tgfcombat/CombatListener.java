@@ -43,14 +43,12 @@ public class CombatListener implements Listener {
     }
 
     private boolean triggerCombat(Player entity, Player damager) {
-        Map<UUID, Boolean> states = Database.getInstance(plugin).getStates();
-
-        if (Boolean.FALSE.equals(states.getOrDefault(damager.getUniqueId(), true))) {
+        if (!Database.getInstance(plugin).getState(damager.getUniqueId())) {
             TGFCombat.sendMessage(damager, ChatColor.RED + "You have PVP disabled!");
             return false;
         }
 
-        if (Boolean.FALSE.equals(states.getOrDefault(entity.getUniqueId(), true))) {
+        if (!Database.getInstance(plugin).getState(entity.getUniqueId())) {
             TGFCombat.sendMessage(damager, ChatColor.RED + "That player has PVP disabled!");
             return false;
         }
