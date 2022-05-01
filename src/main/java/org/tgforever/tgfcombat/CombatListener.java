@@ -88,11 +88,12 @@ public class CombatListener implements Listener {
         return true;
     }
 
-    @EventHandler // TODO check the crystal code
+    @EventHandler
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
         if (event.getEntity() instanceof Player entity) {
-            if (event.getDamager() instanceof Player damager && !triggerCombat(entity, damager)) event.setCancelled(true);
-            else if (event.getDamager() instanceof EnderCrystal crystal && crystalAttackers.containsKey(crystal.getEntityId())) {
+            if (event.getDamager() instanceof Player damager && !triggerCombat(entity, damager)) {
+                event.setCancelled(true);
+            } else if (event.getDamager() instanceof EnderCrystal crystal && crystalAttackers.containsKey(crystal.getEntityId())) {
                 final Player attacker = plugin.getServer().getPlayer(crystalAttackers.get(crystal.getEntityId()));
                 if (attacker == null || attacker.equals(entity)) return;
                 if (!triggerCombat(entity, attacker)) event.setCancelled(true);
