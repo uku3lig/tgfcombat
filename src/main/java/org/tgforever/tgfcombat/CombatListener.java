@@ -32,7 +32,6 @@ import java.util.List;
 import java.util.UUID;
 
 // FIXME make attacks NON LETHAL
-// FIXME creative mode
 public class CombatListener implements Listener {
     private static final int COOLDOWN = 15;
     private final HashMap<UUID, Instant> lastAttack = new HashMap<>();
@@ -52,6 +51,11 @@ public class CombatListener implements Listener {
     }
 
     private boolean triggerCombat(Player entity, Player damager) {
+        // if any in creative, do not trigger combat
+        if (entity.getGameMode().equals(GameMode.CREATIVE) || damager.getGameMode().equals(GameMode.CREATIVE)) {
+            return false;
+        }
+
         if (!Database.getInstance(plugin).getState(damager.getUniqueId())) {
             TGFCombat.sendMessage(damager, ChatColor.RED + "You have PVP disabled!");
             return false;
