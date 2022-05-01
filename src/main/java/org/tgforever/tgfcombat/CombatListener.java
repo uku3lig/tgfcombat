@@ -1,16 +1,10 @@
 package org.tgforever.tgfcombat;
 
 import net.kyori.adventure.text.Component;
-import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
-import org.bukkit.Location;
-import org.bukkit.World;
+import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.type.Bed;
-import org.bukkit.entity.EnderCrystal;
-import org.bukkit.entity.LivingEntity;
-import org.bukkit.entity.Player;
-import org.bukkit.entity.ThrownPotion;
+import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
@@ -127,6 +121,11 @@ public class CombatListener implements Listener {
     @EventHandler
     public void onPotionSplash(PotionSplashEvent event) {
         if (!(event.getEntity().getShooter() instanceof Player damager)) {
+            return;
+        }
+
+        // splashing yourself shouldnt have an effect
+        if (event.getAffectedEntities().stream().filter(Player.class::isInstance).map(Player.class::cast).map(Entity::getUniqueId).allMatch(damager.getUniqueId()::equals)) {
             return;
         }
 
