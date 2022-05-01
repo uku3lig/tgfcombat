@@ -105,9 +105,8 @@ public class CombatListener implements Listener {
 
     @EventHandler
     public void onProjectileHit(ProjectileHitEvent event) {
-        if (!(event.getEntity().getShooter() instanceof Player damager)) {
-            return;
-        }
+        if (!(event.getEntity().getShooter() instanceof Player damager)) return;
+        if (event.getEntity() instanceof ThrownPotion) return; // if a potion is thrown, let it be handled by onPotionSplash
 
         if (event.getHitEntity() instanceof Player entity) {
             final boolean shouldEnterCombat = triggerCombat(entity, damager);
@@ -130,7 +129,6 @@ public class CombatListener implements Listener {
             return;
         }
 
-        // FIXME if potion hits directly, type doesnt matter
         // FIXME lingering not working
         final List<PotionEffectType> negativePotionEffects = Arrays.asList(
                 PotionEffectType.BAD_OMEN,
