@@ -4,27 +4,23 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.io.*;
-import java.util.HashMap;
-import java.util.UUID;
+import java.util.Objects;
 
 public class TGFCombat extends JavaPlugin {
-    private HashMap<UUID, Double> lastAttackTimes;
-
     @Override
     public void onEnable() {
-        getLogger().info("onEnable has been run");
-        lastAttackTimes = new HashMap<UUID, Double>();
+        getLogger().info("Enabling TGFCombat...");
 
         saveDefaultConfig();
+        CombatListener listener = new CombatListener(this);
 
-        getServer().getPluginManager().registerEvents(new CombatListener(this), this);
-        this.getCommand("pvp").setExecutor(new CommandPVPToggle(this, lastAttackTimes));
+        getServer().getPluginManager().registerEvents(listener, this);
+        Objects.requireNonNull(this.getCommand("pvp")).setExecutor(new PVPToggleCommand(this, listener));
     }
 
     @Override
     public void onDisable() {
-        getLogger().info("onDisable has been run");
+        getLogger().info("Disabling TGFCombat...");
     }
 
     public static void sendMessage(CommandSender target, String message) {

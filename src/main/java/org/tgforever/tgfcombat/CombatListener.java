@@ -52,7 +52,7 @@ public class CombatListener implements Listener {
         this.plugin = plugin;
     }
 
-    private boolean isInCombat(Player player) {
+    public boolean isInCombat(Player player) {
         if (!lastAttack.containsKey(player.getUniqueId())) return false;
         return lastAttack.get(player.getUniqueId()).plusSeconds(plugin.getConfig().getInt("combat-tag-length")).isAfter(Instant.now());
     }
