@@ -27,7 +27,6 @@ import java.util.*;
 
 // FIXME make attacks NON LETHAL
 public class CombatListener implements Listener {
-    private static final int COOLDOWN = 15; // TODO move to config
     private static final List<PotionEffectType> NEGATIVE_EFFECTS = Arrays.asList(
             PotionEffectType.BAD_OMEN,
             PotionEffectType.BLINDNESS,
@@ -55,7 +54,7 @@ public class CombatListener implements Listener {
 
     private boolean isInCombat(Player player) {
         if (!lastAttack.containsKey(player.getUniqueId())) return false;
-        return lastAttack.get(player.getUniqueId()).plusSeconds(COOLDOWN).isAfter(Instant.now());
+        return lastAttack.get(player.getUniqueId()).plusSeconds(plugin.getConfig().getInt("combat-tag-length")).isAfter(Instant.now());
     }
 
     private boolean triggerCombat(Player entity, Player damager) {
@@ -74,18 +73,20 @@ public class CombatListener implements Listener {
             return false;
         }
 
+        int cooldown = plugin.getConfig().getInt("combat-tag-length");
+
         Runnable task = new Runnable() {
             @Override
             public void run() {
                 int sinceLastAttack = (int) Duration.between(Instant.now(), lastAttack.get(damager.getUniqueId())).abs().toSeconds();
-                sinceLastAttack = Math.min(sinceLastAttack, COOLDOWN);
+                sinceLastAttack = Math.min(sinceLastAttack, cooldown);
 
-                String combatBar = ChatColor.RED + "|".repeat(COOLDOWN - sinceLastAttack) + ChatColor.GREEN + "|".repeat(sinceLastAttack);
-                String remainingTime = ChatColor.WHITE + String.valueOf(COOLDOWN - sinceLastAttack) + "s";
+                String combatBar = ChatColor.RED + "|".repeat(cooldown - sinceLastAttack) + ChatColor.GREEN + "|".repeat(sinceLastAttack);
+                String remainingTime = ChatColor.WHITE + String.valueOf(cooldown - sinceLastAttack) + "s";
                 String combatIndicator = ChatColor.DARK_AQUA + "Combat" + ChatColor.WHITE + " » ";
                 damager.sendActionBar(Component.text(combatIndicator + combatBar + "   " + remainingTime + " ".repeat(4 - (remainingTime.length() - 2))));
 
-                if (sinceLastAttack < COOLDOWN) Bukkit.getScheduler().runTaskLater(plugin, this, 1L);
+                if (sinceLastAttack < cooldown) Bukkit.getScheduler().runTaskLater(plugin, this, 1L);
                 else TGFCombat.sendMessage(damager, ChatColor.GREEN + "You are no longer in combat.");
             }
         };
@@ -95,7 +96,8 @@ public class CombatListener implements Listener {
             Bukkit.getScheduler().runTask(plugin, task);
         }
 
-        if (!isInCombat(entity)) TGFCombat.sendMessage(entity, ChatColor.YELLOW + damager.getName() + " is attacking you!");
+        if (!isInCombat(entity))
+            TGFCombat.sendMessage(entity, ChatColor.YELLOW + damager.getName() + " is attacking you!");
         else lastAttack.put(entity.getUniqueId(), Instant.now()); // if both are in combat, reset both timers
 
         lastAttack.put(damager.getUniqueId(), Instant.now());
@@ -112,7 +114,7 @@ public class CombatListener implements Listener {
                 if (attacker == null || attacker.equals(entity)) return;
                 if (!triggerCombat(entity, attacker)) event.setCancelled(true);
             } else if (event.getDamager() instanceof ThrownPotion potion && potion.getItem().getType().equals(Material.LINGERING_POTION)
-                && potion.getShooter() instanceof Player damager && !triggerCombat(entity, damager)) {
+                    && potion.getShooter() instanceof Player damager && !triggerCombat(entity, damager)) {
                 event.setCancelled(true);
             }
         } else if (event.getEntity() instanceof EnderCrystal crystal && event.getDamager() instanceof Player damager) {
@@ -123,7 +125,8 @@ public class CombatListener implements Listener {
     @EventHandler
     public void onProjectileHit(ProjectileHitEvent event) {
         if (!(event.getEntity().getShooter() instanceof Player damager)) return;
-        if (event.getEntity() instanceof ThrownPotion) return; // if a potion is thrown, let it be handled by onPotionSplash
+        if (event.getEntity() instanceof ThrownPotion)
+            return; // if a potion is thrown, let it be handled by onPotionSplash
 
         if (event.getHitEntity() instanceof Player entity) {
             if (entity.getUniqueId().equals(damager.getUniqueId())) return; // self shooting shouldn't trigger combat
@@ -142,10 +145,12 @@ public class CombatListener implements Listener {
         if (!(event.getEntity().getShooter() instanceof Player damager)) return;
 
         // splashing ONLY yourself shouldn't have an effect
-        if (event.getAffectedEntities().stream().filter(Player.class::isInstance).map(Entity::getUniqueId).allMatch(damager.getUniqueId()::equals)) return;
+        if (event.getAffectedEntities().stream().filter(Player.class::isInstance).map(Entity::getUniqueId).allMatch(damager.getUniqueId()::equals))
+            return;
 
         // if none of the effects are negative, don't do anything
-        if (event.getEntity().getEffects().stream().map(PotionEffect::getType).noneMatch(NEGATIVE_EFFECTS::contains)) return;
+        if (event.getEntity().getEffects().stream().map(PotionEffect::getType).noneMatch(NEGATIVE_EFFECTS::contains))
+            return;
 
         boolean shouldCancel = event.getAffectedEntities().stream()
                 .filter(Player.class::isInstance)
@@ -161,7 +166,8 @@ public class CombatListener implements Listener {
         if (!(event.getEntity().getSource() instanceof Player damager)) return;
 
         // splashing yourself shouldn't have an effect
-        if (event.getAffectedEntities().stream().filter(Player.class::isInstance).map(Entity::getUniqueId).allMatch(damager.getUniqueId()::equals)) return;
+        if (event.getAffectedEntities().stream().filter(Player.class::isInstance).map(Entity::getUniqueId).allMatch(damager.getUniqueId()::equals))
+            return;
 
         // if the effect isn't negative, don't do anything
         if (!NEGATIVE_EFFECTS.contains(event.getEntity().getBasePotionData().getType().getEffectType())) return;
@@ -233,24 +239,10 @@ public class CombatListener implements Listener {
     public void onCommand(PlayerCommandPreprocessEvent event) {
         if (!isInCombat(event.getPlayer())) return;
 
-        // TODO blocked commands in config file
-        final String[] blockedCommands = {
-                "/home",
-                "/h",
-                "/spawn",
-                "/sp",
-                "/enderchest",
-                "/ec",
-                "/workbench",
-                "/wb",
-                "/nether"
-        };
-
-        for (String blockedCommand : blockedCommands) {
-            if (event.getMessage().split(" ")[0].toLowerCase().equals(blockedCommand)) {
-                TGFCombat.sendMessage(event.getPlayer(), ChatColor.RED + "You may not use that command while in combat.");
-                event.setCancelled(true);
-            }
+        String command = event.getMessage().split(" ")[0].toLowerCase();
+        if (plugin.getConfig().getStringList("blacklisted-commands").contains(command)) {
+            TGFCombat.sendMessage(event.getPlayer(), ChatColor.RED + "You may not use that command while in combat.");
+            event.setCancelled(true);
         }
     }
 

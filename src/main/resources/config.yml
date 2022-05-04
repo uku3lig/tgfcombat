@@ -1,0 +1,12 @@
+combat-tag-length: 15 # seconds
+
+blacklisted-commands:
+  - /home
+  - /h
+  - /spawn
+  - /sp
+  - /enderchest
+  - /ec
+  - /workbench
+  - /wb
+  - /nether

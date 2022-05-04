@@ -16,6 +16,8 @@ public class TGFCombat extends JavaPlugin {
         getLogger().info("onEnable has been run");
         lastAttackTimes = new HashMap<UUID, Double>();
 
+        saveDefaultConfig();
+
         getServer().getPluginManager().registerEvents(new CombatListener(this), this);
         this.getCommand("pvp").setExecutor(new CommandPVPToggle(this, lastAttackTimes));
     }
