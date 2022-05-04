@@ -7,10 +7,8 @@ import org.bukkit.block.data.type.Bed;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.event.entity.PotionSplashEvent;
-import org.bukkit.event.entity.ProjectileHitEvent;
+import org.bukkit.event.entity.*;
+import org.bukkit.event.entity.EntityPotionEffectEvent.*;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -20,14 +18,26 @@ import org.bukkit.potion.PotionEffectType;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 // FIXME make attacks NON LETHAL
+// FIXME players in creative mode cannot attack
 public class CombatListener implements Listener {
-    private static final int COOLDOWN = 15;
+    private static final int COOLDOWN = 15; // TODO move to config
+    private static final List<PotionEffectType> NEGATIVE_EFFECTS = Arrays.asList(
+            PotionEffectType.BAD_OMEN,
+            PotionEffectType.BLINDNESS,
+            PotionEffectType.CONFUSION,
+            PotionEffectType.HARM,
+            PotionEffectType.HUNGER,
+            PotionEffectType.POISON,
+            PotionEffectType.SLOW,
+            PotionEffectType.SLOW_DIGGING,
+            PotionEffectType.UNLUCK,
+            PotionEffectType.WEAKNESS,
+            PotionEffectType.WITHER
+    );
+
     private final HashMap<UUID, Instant> lastAttack = new HashMap<>();
     private final JavaPlugin plugin;
     private final HashMap<Integer, UUID> crystalAttackers;
@@ -97,6 +107,9 @@ public class CombatListener implements Listener {
                 final Player attacker = plugin.getServer().getPlayer(crystalAttackers.get(crystal.getEntityId()));
                 if (attacker == null || attacker.equals(entity)) return;
                 if (!triggerCombat(entity, attacker)) event.setCancelled(true);
+            } else if (event.getDamager() instanceof ThrownPotion potion && potion.getItem().getType().equals(Material.LINGERING_POTION)
+                && potion.getShooter() instanceof Player damager && !triggerCombat(entity, damager)) {
+                event.setCancelled(true);
             }
         } else if (event.getEntity() instanceof EnderCrystal crystal && event.getDamager() instanceof Player damager) {
             crystalAttackers.put(crystal.getEntityId(), damager.getUniqueId());
@@ -109,6 +122,8 @@ public class CombatListener implements Listener {
         if (event.getEntity() instanceof ThrownPotion) return; // if a potion is thrown, let it be handled by onPotionSplash
 
         if (event.getHitEntity() instanceof Player entity) {
+            if (entity.getUniqueId().equals(damager.getUniqueId())) return; // self shooting shouldn't trigger combat
+
             final boolean shouldEnterCombat = triggerCombat(entity, damager);
             if (!shouldEnterCombat) {
                 event.setCancelled(true);
@@ -120,45 +135,41 @@ public class CombatListener implements Listener {
 
     @EventHandler
     public void onPotionSplash(PotionSplashEvent event) {
-        if (!(event.getEntity().getShooter() instanceof Player damager)) {
-            return;
-        }
+        if (!(event.getEntity().getShooter() instanceof Player damager)) return;
 
-        // splashing yourself shouldnt have an effect
-        if (event.getAffectedEntities().stream().filter(Player.class::isInstance).map(Player.class::cast).map(Entity::getUniqueId).allMatch(damager.getUniqueId()::equals)) {
-            return;
-        }
+        // splashing ONLY yourself shouldn't have an effect
+        if (event.getAffectedEntities().stream().filter(Player.class::isInstance).map(Entity::getUniqueId).allMatch(damager.getUniqueId()::equals)) return;
 
-        // FIXME lingering not working
-        final List<PotionEffectType> negativePotionEffects = Arrays.asList(
-                PotionEffectType.BAD_OMEN,
-                PotionEffectType.BLINDNESS,
-                PotionEffectType.CONFUSION,
-                PotionEffectType.HARM,
-                PotionEffectType.HUNGER,
-                PotionEffectType.POISON,
-                PotionEffectType.SLOW,
-                PotionEffectType.SLOW_DIGGING,
-                PotionEffectType.UNLUCK,
-                PotionEffectType.WEAKNESS,
-                PotionEffectType.WITHER
-        );
+        // if none of the effects are negative, don't do anything
+        if (event.getEntity().getEffects().stream().map(PotionEffect::getType).noneMatch(NEGATIVE_EFFECTS::contains)) return;
 
-        final ThrownPotion potion = event.getEntity();
-        for (PotionEffect effect : potion.getEffects()) {
-            if (negativePotionEffects.contains(effect.getType())) {
-                for (LivingEntity entity : event.getAffectedEntities()) {
-                    if (!(entity instanceof Player player)) {
-                        continue;
-                    }
+        boolean shouldCancel = event.getAffectedEntities().stream()
+                .filter(Player.class::isInstance)
+                .map(Player.class::cast)
+                .anyMatch(player -> !triggerCombat(player, damager));
 
-                    final boolean shouldEnterCombat = triggerCombat(player, damager);
-                    if (!shouldEnterCombat) {
-                        event.setCancelled(true);
-                    }
-                }
-            }
-        }
+        // sadly there is no way of canceling on a player-per-player basis, so we just have to cancel it for everyone
+        if (shouldCancel) event.setCancelled(true);
+    }
+
+    @EventHandler
+    public void onAreaEffectCloudApply(AreaEffectCloudApplyEvent event) {
+        if (!(event.getEntity().getSource() instanceof Player damager)) return;
+
+        // splashing yourself shouldn't have an effect
+        if (event.getAffectedEntities().stream().filter(Player.class::isInstance).map(Entity::getUniqueId).allMatch(damager.getUniqueId()::equals)) return;
+
+        // if the effect isn't negative, don't do anything
+        if (!NEGATIVE_EFFECTS.contains(event.getEntity().getBasePotionData().getType().getEffectType())) return;
+
+        boolean shouldCancel = event.getAffectedEntities().stream()
+                .filter(Player.class::isInstance)
+                .map(Player.class::cast)
+                .anyMatch(player -> !triggerCombat(player, damager));
+
+        // sadly there is no way of canceling on a player-per-player basis, so we just have to cancel it for everyone
+        if (shouldCancel) event.setCancelled(true);
+
     }
 
     @EventHandler
