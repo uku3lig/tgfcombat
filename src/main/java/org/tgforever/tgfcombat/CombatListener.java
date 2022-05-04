@@ -15,6 +15,7 @@ import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.entity.*;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
@@ -45,6 +46,8 @@ public class CombatListener implements Listener {
     private final Map<UUID, Instant> lastAttack = new HashMap<>();
     private final Map<Integer, UUID> crystalAttackers = new HashMap<>();
     private final Map<Location, UUID> blockAttackers = new HashMap<>();
+
+    private final Set<UUID> kickedPlayers = new HashSet<>();
 
     CombatListener(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -212,10 +215,18 @@ public class CombatListener implements Listener {
         }
     }
 
-    // FIXME handle when the player is kicked
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-        if (isInCombat(event.getPlayer())) event.getPlayer().setHealth(0);
+        if (kickedPlayers.contains(event.getPlayer().getUniqueId())) {
+            kickedPlayers.remove(event.getPlayer().getUniqueId());
+        } else if (isInCombat(event.getPlayer())) {
+            event.getPlayer().setHealth(0);
+        }
+    }
+
+    @EventHandler
+    public void onPlayerKick(PlayerKickEvent event) {
+        kickedPlayers.add(event.getPlayer().getUniqueId());
     }
 
     @EventHandler
