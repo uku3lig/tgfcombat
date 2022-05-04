@@ -4,11 +4,15 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.type.Bed;
-import org.bukkit.entity.*;
+import org.bukkit.block.data.type.RespawnAnchor;
+import org.bukkit.entity.EnderCrystal;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
+import org.bukkit.entity.ThrownPotion;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.entity.*;
-import org.bukkit.event.entity.EntityPotionEffectEvent.*;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -21,7 +25,6 @@ import java.time.Instant;
 import java.util.*;
 
 // FIXME make attacks NON LETHAL
-// FIXME players in creative mode cannot attack
 public class CombatListener implements Listener {
     private static final int COOLDOWN = 15; // TODO move to config
     private static final List<PotionEffectType> NEGATIVE_EFFECTS = Arrays.asList(
@@ -38,15 +41,13 @@ public class CombatListener implements Listener {
             PotionEffectType.WITHER
     );
 
-    private final HashMap<UUID, Instant> lastAttack = new HashMap<>();
     private final JavaPlugin plugin;
-    private final HashMap<Integer, UUID> crystalAttackers;
-    private final HashMap<Location, UUID> lastVolatileBlockAttackers;
+    private final Map<UUID, Instant> lastAttack = new HashMap<>();
+    private final Map<Integer, UUID> crystalAttackers = new HashMap<>();
+    private final Map<Location, UUID> blockAttackers = new HashMap<>();
 
     CombatListener(JavaPlugin plugin) {
         this.plugin = plugin;
-        crystalAttackers = new HashMap<>();
-        lastVolatileBlockAttackers = new HashMap<>();
     }
 
     private boolean isInCombat(Player player) {
@@ -179,16 +180,39 @@ public class CombatListener implements Listener {
 
         if (block == null) return;
 
-        // FIXME respawn anchors
-        if (block.getBlockData() instanceof Bed) {
-            if (player.getWorld().getEnvironment() == World.Environment.NORMAL) {
-                return;
+        if (block.getBlockData() instanceof Bed bed && !block.getWorld().getEnvironment().equals(World.Environment.NORMAL)) {
+            if (bed.getPart().equals(Bed.Part.FOOT)) {
+                // when the bed explodes (cf onBlockExplode), the coords of the block are those of the HEAD
+                // bed.getFacing().getDirection() gives a vector of length 1, and its coords are one block in the direction of the bed
+                // so when adding this vector, it adds (or subtracts) 1 to the correct coordinate of the bed
+                // making it the coordinate of the head
+                blockAttackers.put(block.getLocation().add(bed.getFacing().getDirection()), player.getUniqueId());
+            } else {
+                blockAttackers.put(block.getLocation(), player.getUniqueId());
             }
-
-            lastVolatileBlockAttackers.put(block.getLocation(), player.getUniqueId());
+        } else if (block.getBlockData() instanceof RespawnAnchor && !block.getWorld().getEnvironment().equals(World.Environment.NETHER)) {
+            blockAttackers.put(block.getLocation(), player.getUniqueId());
         }
     }
 
+    @EventHandler
+    public void onBlockExplode(BlockExplodeEvent event) {
+        if (!blockAttackers.containsKey(event.getBlock().getLocation())) return;
+        Player damager = Bukkit.getPlayer(blockAttackers.get(event.getBlock().getLocation()));
+        if (damager == null) return;
+
+        for (Player player : event.getBlock().getWorld().getPlayers()) {
+            double distance = Math.sqrt(event.getBlock().getLocation().distanceSquared(player.getLocation()));
+            // beds and anchors have an explosion power of 5
+            // so entities will not take damage if the distance is more than 2*power = 2*5 = 10 blocks
+            // this was found inspecting the minecraft code, Explosion#collectBlocksAndDamageEntities
+            // this is like 99% accurate, but the error margin is a fraction of a block, nothing is going to change at these distances
+            if (player.getUniqueId().equals(damager.getUniqueId()) || distance > 10) continue;
+            if (!triggerCombat(player, damager)) event.setCancelled(true);
+        }
+    }
+
+    // FIXME handle when the player is kicked
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         if (isInCombat(event.getPlayer())) event.getPlayer().setHealth(0);
