@@ -1,6 +1,8 @@
 package org.tgforever.tgfcombat;
 
 import net.kyori.adventure.text.Component;
+import net.luckperms.api.LuckPerms;
+import net.luckperms.api.node.Node;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.type.Bed;
@@ -40,16 +42,19 @@ public class CombatListener implements Listener {
             PotionEffectType.WEAKNESS,
             PotionEffectType.WITHER
     );
+    private static final Node INSTANT_TP_NODE = Node.builder("essentials.teleport.timer.bypass").build();
 
     private final JavaPlugin plugin;
+    private final LuckPerms luckPerms;
     private final Map<UUID, Instant> lastAttack = new HashMap<>();
     private final Map<Integer, UUID> crystalAttackers = new HashMap<>();
     private final Map<Location, UUID> blockAttackers = new HashMap<>();
 
     private final Set<UUID> kickedPlayers = new HashSet<>();
 
-    CombatListener(JavaPlugin plugin) {
+    public CombatListener(JavaPlugin plugin, LuckPerms luckPerms) {
         this.plugin = plugin;
+        this.luckPerms = luckPerms;
     }
 
     public boolean isInCombat(Player player) {
@@ -77,7 +82,10 @@ public class CombatListener implements Listener {
                 damager.sendActionBar(Component.text(combatIndicator + combatBar + "   " + remainingTime + " ".repeat(4 - (remainingTime.length() - 2))));
 
                 if (sinceLastAttack < cooldown) Bukkit.getScheduler().runTaskLater(plugin, this, 1L);
-                else TGFCombat.sendMessage(damager, ChatColor.GREEN + "You are no longer in combat.");
+                else {
+                    luckPerms.getUserManager().modifyUser(entity.getUniqueId(), u -> u.data().remove(INSTANT_TP_NODE));
+                    TGFCombat.sendMessage(damager, ChatColor.GREEN + "You are no longer in combat.");
+                }
             }
         };
 
@@ -86,9 +94,10 @@ public class CombatListener implements Listener {
             Bukkit.getScheduler().runTask(plugin, task);
         }
 
-        if (!isInCombat(entity))
+        if (!isInCombat(entity)) {
+            luckPerms.getUserManager().modifyUser(entity.getUniqueId(), u -> u.data().add(INSTANT_TP_NODE));
             TGFCombat.sendMessage(entity, ChatColor.YELLOW + damager.getName() + " is attacking you!");
-        else lastAttack.put(entity.getUniqueId(), Instant.now()); // if both are in combat, reset both timers
+        } else lastAttack.put(entity.getUniqueId(), Instant.now()); // if both are in combat, reset both timers
 
         lastAttack.put(damager.getUniqueId(), Instant.now());
         return true;
