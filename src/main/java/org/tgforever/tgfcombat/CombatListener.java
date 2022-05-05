@@ -222,6 +222,7 @@ public class CombatListener implements Listener {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
+        luckPerms.getUserManager().modifyUser(event.getPlayer().getUniqueId(), u -> u.data().remove(INSTANT_TP_NODE));
         if (kickedPlayers.contains(event.getPlayer().getUniqueId())) {
             kickedPlayers.remove(event.getPlayer().getUniqueId());
         } else if (isInCombat(event.getPlayer())) {
