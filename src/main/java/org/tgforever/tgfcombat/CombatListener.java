@@ -3,7 +3,10 @@ package org.tgforever.tgfcombat;
 import net.kyori.adventure.text.Component;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.node.Node;
-import org.bukkit.*;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.type.Bed;
 import org.bukkit.block.data.type.RespawnAnchor;
@@ -27,7 +30,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 
-// FIXME make attacks NON LETHAL
 public class CombatListener implements Listener {
     private static final List<PotionEffectType> NEGATIVE_EFFECTS = Arrays.asList(
             PotionEffectType.BAD_OMEN,
@@ -63,11 +65,6 @@ public class CombatListener implements Listener {
     }
 
     private boolean triggerCombat(Player entity, Player damager) {
-        // if any in creative, do not trigger combat
-        if (entity.getGameMode().equals(GameMode.CREATIVE) || damager.getGameMode().equals(GameMode.CREATIVE)) {
-            return false;
-        }
-
         int cooldown = plugin.getConfig().getInt("combat-tag-length");
 
         Runnable task = new Runnable() {
@@ -100,21 +97,21 @@ public class CombatListener implements Listener {
         } else lastAttack.put(entity.getUniqueId(), Instant.now()); // if both are in combat, reset both timers
 
         lastAttack.put(damager.getUniqueId(), Instant.now());
-        return true;
+        return isInCombat(entity);
     }
 
     @EventHandler
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
         if (event.getEntity() instanceof Player entity) {
             if (event.getDamager() instanceof Player damager && !triggerCombat(entity, damager)) {
-                event.setCancelled(true);
+                event.setDamage(event.getDamage() / 2.5);
             } else if (event.getDamager() instanceof EnderCrystal crystal && crystalAttackers.containsKey(crystal.getEntityId())) {
                 final Player attacker = plugin.getServer().getPlayer(crystalAttackers.get(crystal.getEntityId()));
                 if (attacker == null || attacker.equals(entity)) return;
-                if (!triggerCombat(entity, attacker)) event.setCancelled(true);
-            } else if (event.getDamager() instanceof ThrownPotion potion && potion.getItem().getType().equals(Material.LINGERING_POTION)
-                    && potion.getShooter() instanceof Player damager && !triggerCombat(entity, damager)) {
-                event.setCancelled(true);
+                if (!triggerCombat(entity, attacker)) {
+                    // listen. this works.
+                    event.setDamage(event.getDamage() - Math.min(115, event.getFinalDamage() * 4));
+                }
             }
         } else if (event.getEntity() instanceof EnderCrystal crystal && event.getDamager() instanceof Player damager) {
             crystalAttackers.put(crystal.getEntityId(), damager.getUniqueId());
@@ -129,11 +126,7 @@ public class CombatListener implements Listener {
 
         if (event.getHitEntity() instanceof Player entity) {
             if (entity.getUniqueId().equals(damager.getUniqueId())) return; // self shooting shouldn't trigger combat
-
-            final boolean shouldEnterCombat = triggerCombat(entity, damager);
-            if (!shouldEnterCombat) {
-                event.setCancelled(true);
-            }
+            triggerCombat(entity, damager);
         } else if (event.getHitEntity() instanceof EnderCrystal crystal) {
             crystalAttackers.put(crystal.getEntityId(), damager.getUniqueId());
         }
@@ -151,13 +144,11 @@ public class CombatListener implements Listener {
         if (event.getEntity().getEffects().stream().map(PotionEffect::getType).noneMatch(NEGATIVE_EFFECTS::contains))
             return;
 
-        boolean shouldCancel = event.getAffectedEntities().stream()
+        event.getAffectedEntities().stream()
                 .filter(Player.class::isInstance)
                 .map(Player.class::cast)
-                .anyMatch(player -> !triggerCombat(player, damager));
-
-        // sadly there is no way of canceling on a player-per-player basis, so we just have to cancel it for everyone
-        if (shouldCancel) event.setCancelled(true);
+                .filter(player -> !triggerCombat(player, damager))
+                .forEach(player -> event.setIntensity(player, event.getIntensity(player) / 3));
     }
 
     @EventHandler
@@ -171,14 +162,10 @@ public class CombatListener implements Listener {
         // if the effect isn't negative, don't do anything
         if (!NEGATIVE_EFFECTS.contains(event.getEntity().getBasePotionData().getType().getEffectType())) return;
 
-        boolean shouldCancel = event.getAffectedEntities().stream()
+        event.getAffectedEntities().stream()
                 .filter(Player.class::isInstance)
                 .map(Player.class::cast)
-                .anyMatch(player -> !triggerCombat(player, damager));
-
-        // sadly there is no way of canceling on a player-per-player basis, so we just have to cancel it for everyone
-        if (shouldCancel) event.setCancelled(true);
-
+                .forEach(player -> triggerCombat(player, damager));
     }
 
     @EventHandler
