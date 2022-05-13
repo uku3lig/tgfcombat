@@ -60,6 +60,7 @@ public class CombatListener implements Listener {
     }
 
     public boolean isInCombat(Player player) {
+        if (player.isDead()) return false;
         if (!lastAttack.containsKey(player.getUniqueId())) return false;
         return lastAttack.get(player.getUniqueId()).plusSeconds(plugin.getConfig().getInt("combat-tag-length")).isAfter(Instant.now());
     }
@@ -70,8 +71,9 @@ public class CombatListener implements Listener {
         Runnable task = new Runnable() {
             @Override
             public void run() {
-                lastAttack.computeIfAbsent(damager.getUniqueId(), u -> Instant.now());
+                if (damager.isDead()) return;
 
+                lastAttack.computeIfAbsent(damager.getUniqueId(), u -> Instant.now());
                 int sinceLastAttack = (int) Duration.between(Instant.now(), lastAttack.get(damager.getUniqueId())).abs().toSeconds();
                 sinceLastAttack = Math.min(sinceLastAttack, cooldown);
 
