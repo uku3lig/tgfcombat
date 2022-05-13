@@ -70,6 +70,8 @@ public class CombatListener implements Listener {
         Runnable task = new Runnable() {
             @Override
             public void run() {
+                lastAttack.computeIfAbsent(damager.getUniqueId(), u -> Instant.now());
+
                 int sinceLastAttack = (int) Duration.between(Instant.now(), lastAttack.get(damager.getUniqueId())).abs().toSeconds();
                 sinceLastAttack = Math.min(sinceLastAttack, cooldown);
 
