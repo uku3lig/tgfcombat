@@ -14,7 +14,7 @@ jobs:
         with:
           java-version: 17
       - name: Build jar
-        run: ./gradlew shadowJar
+        run: ./gradlew build
       - name: Get commit sha
         id: var
         run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
