@@ -1,0 +1,25 @@
+name: gradle-ci
+
+on: [ push, pull_request ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup JDK 17
+        uses: actions/setup-java@v1
+        with:
+          java-version: 17
+      - name: Build jar
+        run: ./gradlew shadowJar
+      - name: Get commit sha
+        id: var
+        run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+      - name: Upload jar
+        uses: actions/upload-artifact@v2
+        with:
+          path: build/libs/*.jar
+          name: uklient-build-${{ steps.var.outputs.sha_short }}
