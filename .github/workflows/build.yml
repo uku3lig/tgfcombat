@@ -22,4 +22,4 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           path: build/libs/*.jar
-          name: uklient-build-${{ steps.var.outputs.sha_short }}
+          name: tgfcombat-build-${{ steps.var.outputs.sha_short }}
