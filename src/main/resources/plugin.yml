@@ -4,3 +4,4 @@ main: org.tgforever.tgfcombat.TGFCombat
 api-version: 1.18
 depend:
   - LuckPerms
+  - WorldGuard

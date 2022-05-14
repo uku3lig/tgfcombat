@@ -1,5 +1,12 @@
 package org.tgforever.tgfcombat;
 
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.math.BlockVector3;
+import com.sk89q.worldguard.WorldGuard;
+import com.sk89q.worldguard.protection.flags.Flags;
+import com.sk89q.worldguard.protection.flags.StateFlag;
+import com.sk89q.worldguard.protection.managers.RegionManager;
+import com.sk89q.worldguard.protection.regions.RegionContainer;
 import net.kyori.adventure.text.Component;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.node.Node;
@@ -66,6 +73,19 @@ public class CombatListener implements Listener {
     }
 
     private boolean triggerCombat(Player entity, Player damager) {
+        RegionContainer container = WorldGuard.getInstance().getPlatform().getRegionContainer();
+        RegionManager manager = container.get(BukkitAdapter.adapt(entity.getWorld()));
+        if (manager != null) {
+            BlockVector3 entityVec = BukkitAdapter.asBlockVector(entity.getLocation());
+            BlockVector3 damagerVec = BukkitAdapter.asBlockVector(damager.getLocation());
+
+            boolean isPVPDisabled = manager.getRegions().values().stream()
+                    .filter(r -> Objects.equals(r.getFlag(Flags.PVP), StateFlag.State.DENY))
+                    .anyMatch(r -> r.contains(entityVec) || r.contains(damagerVec));
+
+            if (isPVPDisabled) return false;
+        }
+
         int cooldown = plugin.getConfig().getInt("combat-tag-length");
 
         Runnable task = new Runnable() {
