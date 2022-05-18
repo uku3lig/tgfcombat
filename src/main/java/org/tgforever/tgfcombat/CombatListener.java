@@ -1,7 +1,6 @@
 package org.tgforever.tgfcombat;
 
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
-import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldguard.WorldGuard;
 import com.sk89q.worldguard.protection.flags.Flags;
 import com.sk89q.worldguard.protection.flags.StateFlag;
@@ -25,13 +24,11 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.entity.*;
-import org.bukkit.event.player.PlayerCommandPreprocessEvent;
-import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerKickEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.*;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.util.Vector;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -73,18 +70,7 @@ public class CombatListener implements Listener {
     }
 
     private boolean triggerCombat(Player entity, Player damager) {
-        RegionContainer container = WorldGuard.getInstance().getPlatform().getRegionContainer();
-        RegionManager manager = container.get(BukkitAdapter.adapt(entity.getWorld()));
-        if (manager != null) {
-            BlockVector3 entityVec = BukkitAdapter.asBlockVector(entity.getLocation());
-            BlockVector3 damagerVec = BukkitAdapter.asBlockVector(damager.getLocation());
-
-            boolean isPVPDisabled = manager.getRegions().values().stream()
-                    .filter(r -> Objects.equals(r.getFlag(Flags.PVP), StateFlag.State.DENY))
-                    .anyMatch(r -> r.contains(entityVec) || r.contains(damagerVec));
-
-            if (isPVPDisabled) return false;
-        }
+        if (isPvpProtected(entity.getLocation()) || isPvpProtected(damager.getLocation())) return false;
 
         int cooldown = plugin.getConfig().getInt("combat-tag-length");
 
@@ -260,5 +246,49 @@ public class CombatListener implements Listener {
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
         lastAttack.remove(event.getEntity().getUniqueId());
+    }
+
+    @EventHandler
+    public void onPlayerMove(PlayerMoveEvent event) {
+        if (!isInCombat(event.getPlayer())) return;
+        if (!isPvpProtected(event.getTo()) || isPvpProtected(event.getFrom())) return;
+
+        Player player = event.getPlayer();
+        if (player.isInsideVehicle() && !player.leaveVehicle()) {
+            event.setCancelled(true);
+            return;
+        }
+
+        Runnable task = () -> {
+            Vector from = event.getFrom().toVector();
+            Vector to = event.getTo().toVector();
+
+            Vector velocity = from.subtract(to)
+                    .normalize()
+                    .multiply(1.5)
+                    .setY(0);
+
+            player.setVelocity(velocity);
+        };
+
+        Bukkit.getScheduler().runTaskLater(plugin, task, 1L);
+    }
+
+    @EventHandler
+    public void onPlayerTeleport(PlayerTeleportEvent event) {
+        if (!isInCombat(event.getPlayer())) return;
+        if (!isPvpProtected(event.getTo()) || isPvpProtected(event.getFrom())) return;
+
+        event.setCancelled(true);
+    }
+
+    private boolean isPvpProtected(Location location) {
+        RegionContainer container = WorldGuard.getInstance().getPlatform().getRegionContainer();
+        RegionManager manager = container.get(BukkitAdapter.adapt(location.getWorld()));
+        if (manager == null) return false;
+
+        return manager.getRegions().values().stream()
+                .filter(r -> Objects.equals(r.getFlag(Flags.PVP), StateFlag.State.DENY))
+                .anyMatch(r -> r.contains(BukkitAdapter.asBlockVector(location)));
     }
 }
