@@ -16,18 +16,17 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.type.Bed;
 import org.bukkit.block.data.type.RespawnAnchor;
-import org.bukkit.entity.EnderCrystal;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.Player;
-import org.bukkit.entity.ThrownPotion;
+import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.entity.*;
 import org.bukkit.event.player.*;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.potion.PotionData;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.potion.PotionType;
 import org.bukkit.util.Vector;
 
 import java.time.Duration;
@@ -122,6 +121,11 @@ public class CombatListener implements Listener {
                     // listen. this works.
                     event.setDamage(event.getDamage() - Math.min(115, event.getFinalDamage() * 4));
                 }
+            } else if (event.getDamager() instanceof Arrow arrow && arrow.getShooter() instanceof Player damager
+                    && !damager.getUniqueId().equals(entity.getUniqueId()) && !triggerCombat(entity, damager)) {
+                event.setDamage(event.getDamage() / 3);
+                // disable potion effects
+                arrow.setBasePotionData(new PotionData(PotionType.UNCRAFTABLE));
             }
         } else if (event.getEntity() instanceof EnderCrystal crystal && event.getDamager() instanceof Player damager) {
             crystalAttackers.put(crystal.getEntityId(), damager.getUniqueId());
@@ -131,8 +135,9 @@ public class CombatListener implements Listener {
     @EventHandler
     public void onProjectileHit(ProjectileHitEvent event) {
         if (!(event.getEntity().getShooter() instanceof Player damager)) return;
-        if (event.getEntity() instanceof ThrownPotion)
-            return; // if a potion is thrown, let it be handled by onPotionSplash
+
+        // if a potion is thrown, let it be handled by onPotionSplash
+        if (event.getEntity() instanceof ThrownPotion) return;
 
         if (event.getHitEntity() instanceof Player entity) {
             if (entity.getUniqueId().equals(damager.getUniqueId())) return; // self shooting shouldn't trigger combat
