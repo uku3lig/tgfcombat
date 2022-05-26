@@ -61,6 +61,16 @@ public class CombatListener implements Listener {
     public CombatListener(JavaPlugin plugin, LuckPerms luckPerms) {
         this.plugin = plugin;
         this.luckPerms = luckPerms;
+
+        Bukkit.getScheduler().runTaskTimer(plugin, () -> Bukkit.getServer().getOnlinePlayers().stream()
+                .filter(this::isInCombat)
+                .filter(p -> isPvpProtected(p.getLocation()))
+                .forEach(p -> {
+                    p.setHealth(Math.max(0, p.getHealth() - 5));
+                    p.damage(0.01); // this is done to play the damage animation
+                    // you should use betterhurtcam btw :D
+                    lastAttack.put(p.getUniqueId(), Instant.now());
+                }), 0, 20); // 20 ticks = 1 second
     }
 
     public boolean isInCombat(Player player) {
@@ -285,7 +295,8 @@ public class CombatListener implements Listener {
 
         if (!(data instanceof Bed || data instanceof RespawnAnchor)) return false;
         if (data instanceof Bed && block.getWorld().getEnvironment().equals(Environment.NORMAL)) return false;
-        if (data instanceof RespawnAnchor anchor && (env.equals(Environment.NETHER) || anchor.getCharges() == 0)) return false;
+        if (data instanceof RespawnAnchor anchor && (env.equals(Environment.NETHER) || anchor.getCharges() == 0))
+            return false;
 
         double distance = Math.sqrt(block.getLocation().distanceSquared(player.getLocation()));
         // beds and anchors have an explosion power of 5
