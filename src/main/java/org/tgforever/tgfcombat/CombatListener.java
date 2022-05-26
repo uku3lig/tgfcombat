@@ -18,6 +18,7 @@ import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.type.Bed;
 import org.bukkit.block.data.type.RespawnAnchor;
 import org.bukkit.entity.*;
+import org.bukkit.entity.minecart.ExplosiveMinecart;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
@@ -55,6 +56,7 @@ public class CombatListener implements Listener {
     private final LuckPerms luckPerms;
     private final Map<UUID, Instant> lastAttack = new HashMap<>();
     private final Map<Integer, UUID> crystalAttackers = new HashMap<>();
+    private final Map<Integer, UUID> tntMinecartAttackers = new HashMap<>();
 
     private final Set<UUID> kickedPlayers = new HashSet<>();
 
@@ -127,7 +129,7 @@ public class CombatListener implements Listener {
                 event.setDamage(event.getDamage() / 2.5);
             } else if (event.getDamager() instanceof EnderCrystal crystal && crystalAttackers.containsKey(crystal.getEntityId())) {
                 final Player attacker = plugin.getServer().getPlayer(crystalAttackers.get(crystal.getEntityId()));
-                if (attacker == null || attacker.equals(entity)) return;
+                if (attacker == null || attacker.getUniqueId().equals(entity.getUniqueId())) return;
                 if (!triggerCombat(entity, attacker)) {
                     // listen. this works.
                     event.setDamage(event.getDamage() - Math.min(115, event.getFinalDamage() * 4));
@@ -137,6 +139,13 @@ public class CombatListener implements Listener {
                 event.setDamage(event.getDamage() / 3);
                 // disable potion effects
                 arrow.setBasePotionData(new PotionData(PotionType.UNCRAFTABLE));
+            } else if (event.getDamager() instanceof TNTPrimed tnt && tnt.getSource() instanceof Player damager
+                    && !triggerCombat(entity, damager)) {
+                event.setDamage(event.getDamage() / 4);
+            } else if (event.getDamager() instanceof ExplosiveMinecart minecart && tntMinecartAttackers.containsKey(minecart.getEntityId())) {
+                final Player damager = plugin.getServer().getPlayer(tntMinecartAttackers.get(minecart.getEntityId()));
+                if (damager == null || damager.getUniqueId().equals(entity.getUniqueId())) return;
+                if (!triggerCombat(entity, damager)) event.setDamage(event.getDamage() / 6);
             }
         } else if (event.getEntity() instanceof EnderCrystal crystal && event.getDamager() instanceof Player damager) {
             crystalAttackers.put(crystal.getEntityId(), damager.getUniqueId());
@@ -212,6 +221,13 @@ public class CombatListener implements Listener {
         } else {
             affectedPlayers.forEach(p -> triggerCombat(p, damager));
         }
+    }
+
+    @EventHandler
+    public void onEntityPlace(EntityPlaceEvent event) {
+        if (!event.getEntityType().equals(EntityType.MINECART_TNT)) return;
+        if (event.getPlayer() == null) return;
+        tntMinecartAttackers.put(event.getEntity().getEntityId(), event.getPlayer().getUniqueId());
     }
 
     @EventHandler
