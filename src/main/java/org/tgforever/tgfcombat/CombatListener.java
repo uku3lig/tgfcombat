@@ -11,6 +11,7 @@ import net.luckperms.api.LuckPerms;
 import net.luckperms.api.node.Node;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World.Environment;
 import org.bukkit.block.Block;
@@ -83,6 +84,7 @@ public class CombatListener implements Listener {
 
     private boolean triggerCombat(Player entity, Player damager) {
         if (isPvpProtected(entity.getLocation()) || isPvpProtected(damager.getLocation())) return false;
+        if (damager.getGameMode().equals(GameMode.CREATIVE)) return false;
 
         int cooldown = plugin.getConfig().getInt("combat-tag-length");
 
