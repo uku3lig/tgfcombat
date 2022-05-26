@@ -12,14 +12,15 @@ import net.luckperms.api.node.Node;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
-import org.bukkit.World;
+import org.bukkit.World.Environment;
 import org.bukkit.block.Block;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.type.Bed;
 import org.bukkit.block.data.type.RespawnAnchor;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.BlockExplodeEvent;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.*;
 import org.bukkit.event.player.*;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -32,6 +33,7 @@ import org.bukkit.util.Vector;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class CombatListener implements Listener {
     private static final List<PotionEffectType> NEGATIVE_EFFECTS = Arrays.asList(
@@ -53,7 +55,6 @@ public class CombatListener implements Listener {
     private final LuckPerms luckPerms;
     private final Map<UUID, Instant> lastAttack = new HashMap<>();
     private final Map<Integer, UUID> crystalAttackers = new HashMap<>();
-    private final Map<Location, UUID> blockAttackers = new HashMap<>();
 
     private final Set<UUID> kickedPlayers = new HashSet<>();
 
@@ -186,39 +187,20 @@ public class CombatListener implements Listener {
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event) {
         final Block block = event.getClickedBlock();
-        final Player player = event.getPlayer();
+        final Player damager = event.getPlayer();
 
+        if (!event.getAction().equals(Action.RIGHT_CLICK_BLOCK)) return;
         if (block == null) return;
 
-        if (block.getBlockData() instanceof Bed bed && !block.getWorld().getEnvironment().equals(World.Environment.NORMAL)) {
-            if (bed.getPart().equals(Bed.Part.FOOT)) {
-                // when the bed explodes (cf onBlockExplode), the coords of the block are those of the HEAD
-                // bed.getFacing().getDirection() gives a vector of length 1, and its coords are one block in the direction of the bed
-                // so when adding this vector, it adds (or subtracts) 1 to the correct coordinate of the bed
-                // making it the coordinate of the head
-                blockAttackers.put(block.getLocation().add(bed.getFacing().getDirection()), player.getUniqueId());
-            } else {
-                blockAttackers.put(block.getLocation(), player.getUniqueId());
-            }
-        } else if (block.getBlockData() instanceof RespawnAnchor && !block.getWorld().getEnvironment().equals(World.Environment.NETHER)) {
-            blockAttackers.put(block.getLocation(), player.getUniqueId());
-        }
-    }
+        Set<Player> affectedPlayers = block.getWorld().getPlayers().stream()
+                .filter(p -> isInExplosionRange(p, block) && !p.getUniqueId().equals(damager.getUniqueId()))
+                .collect(Collectors.toSet());
 
-    @EventHandler
-    public void onBlockExplode(BlockExplodeEvent event) {
-        if (!blockAttackers.containsKey(event.getBlock().getLocation())) return;
-        Player damager = Bukkit.getPlayer(blockAttackers.get(event.getBlock().getLocation()));
-        if (damager == null) return;
-
-        for (Player player : event.getBlock().getWorld().getPlayers()) {
-            double distance = Math.sqrt(event.getBlock().getLocation().distanceSquared(player.getLocation()));
-            // beds and anchors have an explosion power of 5
-            // so entities will not take damage if the distance is more than 2*power = 2*5 = 10 blocks
-            // this was found inspecting the minecraft code, Explosion#collectBlocksAndDamageEntities
-            // this is like 99% accurate, but the error margin is a fraction of a block, nothing is going to change at these distances
-            if (player.getUniqueId().equals(damager.getUniqueId()) || distance > 10) continue;
-            if (!triggerCombat(player, damager)) event.setCancelled(true);
+        if (!affectedPlayers.stream().allMatch(this::isInCombat)) {
+            TGFCombat.sendMessage(damager, ChatColor.YELLOW + "You cannot blow up this block as someone is in explosion range.");
+            event.setCancelled(true);
+        } else {
+            affectedPlayers.forEach(p -> triggerCombat(p, damager));
         }
     }
 
@@ -295,5 +277,21 @@ public class CombatListener implements Listener {
         return manager.getRegions().values().stream()
                 .filter(r -> Objects.equals(r.getFlag(Flags.PVP), StateFlag.State.DENY))
                 .anyMatch(r -> r.contains(BukkitAdapter.asBlockVector(location)));
+    }
+
+    private boolean isInExplosionRange(Player player, Block block) {
+        BlockData data = block.getBlockData();
+        Environment env = block.getWorld().getEnvironment();
+
+        if (!(data instanceof Bed || data instanceof RespawnAnchor)) return false;
+        if (data instanceof Bed && block.getWorld().getEnvironment().equals(Environment.NORMAL)) return false;
+        if (data instanceof RespawnAnchor anchor && (env.equals(Environment.NETHER) || anchor.getCharges() == 0)) return false;
+
+        double distance = Math.sqrt(block.getLocation().distanceSquared(player.getLocation()));
+        // beds and anchors have an explosion power of 5
+        // so entities will not take damage if the distance is more than 2*power = 2*5 = 10 blocks
+        // this was found inspecting the minecraft code, Explosion#collectBlocksAndDamageEntities
+        // this is like 99% accurate, but the error margin is a fraction of a block, nothing is going to change at these distances
+        return distance <= 10;
     }
 }
